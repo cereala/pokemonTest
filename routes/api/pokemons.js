@@ -28,7 +28,7 @@ const upload = multer({
   limits: {
     fileSize: 1024 * 1024 * 5,
   },
-  fileFilter: fileFilter
+  fileFilter: fileFilter,
 });
 
 /*
@@ -38,7 +38,7 @@ const upload = multer({
  * @
  */
 router.post("/pokemon", upload.single("pokemonImage"), async (req, res) => {
-  console.log(req.file);
+  if(req.file != undefined) console.log(req.file);
   const { name, height, weight, abilities, firstItem } = req.body;
   const pokemon = new Pokemon({
     name,
@@ -52,7 +52,8 @@ router.post("/pokemon", upload.single("pokemonImage"), async (req, res) => {
     const newPokemon = await pokemon.save();
     res.status(201).send(newPokemon);
   } catch (err) {
-    res.status(500).send(err);
+      if(err.name == 'ValidationError') res.status(404).send(err)
+      else res.status(500).send(err.message);
   }
 });
 
@@ -60,7 +61,7 @@ router.post("/pokemon", upload.single("pokemonImage"), async (req, res) => {
  * @route GET
  * @description Retrieves all Pokemons sorted descending by weight
  */
-router.get("/pokemon", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const pokemons = await Pokemon.find().sort({ weight: -1 });
     res.status(200).send(pokemons);
@@ -74,12 +75,17 @@ router.get("/pokemon", async (req, res) => {
  * @description Retrieves the Pokemon details of this Pokemon id
  * @param id of the Pokemon that we want to see details
  */
-router.get("/pokemon/:id", async (req, res, next) => {
+router.get("/pokemon/:id", async (req, res) => {
   try {
     const pokemon = await Pokemon.findById(req.params.id);
-    res.status(200).send(pokemon);
+    console.log(pokemon);
+    if (pokemon != null) res.status(200).send(pokemon);
+    else
+      res
+        .status(404)
+        .send(`No Pokemon with id: ${req.params.id} was found in the DB.`);
   } catch (err) {
-    res.status(500).send({ message: "No such pokemon with this ID", err: err });
+    res.status(500).send(err);
   }
 });
 
@@ -131,7 +137,7 @@ router.delete("/pokemon", async (req, res) => {
       res.status(200).send("No deletion occurred. DB is empty.");
     } else
       res
-        .status(204)
+        .status(200)
         .send(
           `Successfully deleted ALL ${result.deletedCount} Pokemons in the DB!`
         );
@@ -200,51 +206,64 @@ router.get("/populate-database", (req, res) => {
  * @route GET
  * @description Populates the DB with up to 100 Pokemons from PokeAPI
  */
-router.get("/populate-database-v2", (req, res) => {
-  // check to see if there are 100 Pokemons
-  Pokemon.countDocuments({}, (err, count) => {
-    if (err) res.status(404).send(err);
-    else if (count < 100) {
-      // if not import the rest of them up to 100 Pokemons
-      fetch(
-        `https://pokeapi.co/api/v2/pokemon?offset=${count}&limit=${100 - count}`
-      )
-        .then((res) => res.json())
-        .then((data) => {
-          data.results.forEach((pokemon) => {
-            fetch(pokemon.url)
-              .then((res) => res.json())
-              .then((data) => {
-                const newPokemon = new Pokemon();
-                newPokemon.name = pokemon.name;
-                newPokemon.height = data.height;
-                newPokemon.weight = data.weight;
-                data.abilities.forEach((ability) => {
-                  newPokemon.abilities.push({
-                    ability_name: ability.ability.name,
-                    ability_slot: ability.slot,
-                    hidden: ability.is_hidden,
-                  });
-                });
+router.get("/populate-database-v2", async (req, res) => {
+  try {
+    let count = await Pokemon.countDocuments({});
+    let toFetch = 100 - count
+    if (count >= 100)
+      res
+        .status(200)
+        .send(
+          `There are ${count} Pokemon in the DB. No need to populate DB with more.`
+        );
+    else {
+      // fetch 100-count 1st Generation Pokemons from the API
+      const firstGen = "https://pokeapi.co/api/v2/generation/1";
+      const response = await fetch(firstGen);
+      const data = await response.json();
+      let i = 0
 
-                if (data.held_items.length > 0) {
-                  newPokemon.firstItem.name = data.held_items[0].item.name;
-                  newPokemon.firstItem.url = data.held_items[0].item.url;
-                } else {
-                  newPokemon.firstItem.name = "no_held_item";
-                  newPokemon.firstItem.url = "N/A";
-                }
-                newPokemon.save();
-              })
-              .catch((err) => console.log(err));
+      while (count < 100) {
+        const species_url = data.pokemon_species[i].url;
+        // example: https://pokeapi.co/api/v2/pokemon-species/149/   --Up to 151 is 1st gen
+        const res = await fetch(species_url);
+        const specie = await res.json();
+        const pokemonName = specie.varieties[0].pokemon.name;
+        const pokemonURL = specie.varieties[0].pokemon.url;
+        // check for duplicate Pokemon in DB
+        const result = await Pokemon.findOne({ name: pokemonName });
+        if (result === null) {
+          // New Pokemon
+          const pokemonDetails = await (await fetch(pokemonURL)).json();
+          const newPokemon = new Pokemon();
+          newPokemon.name = pokemonDetails.name;
+          newPokemon.height = pokemonDetails.height;
+          newPokemon.weight = pokemonDetails.weight;
+          pokemonDetails.abilities.forEach((ability) => {
+            newPokemon.abilities.push({
+              ability_name: ability.ability.name,
+              ability_slot: ability.slot,
+              hidden: ability.is_hidden,
+            });
           });
-          res.status(200).send(`Fetched ${100 - count} of them`);
-        })
-        .catch((err) => console.log(err));
-    } else {
-      res.status(200).send("There are enough (over 100) Pokemons in the DB.");
+          if (pokemonDetails.held_items.length > 0) {
+            newPokemon.firstItem.name = pokemonDetails.held_items[0].item.name;
+            newPokemon.firstItem.url = pokemonDetails.held_items[0].item.url;
+          } else {
+            newPokemon.firstItem.name = "no_held_item";
+            newPokemon.firstItem.url = "N/A";
+          }
+          newPokemon.save();
+          count++
+        }
+        i++
+      }
+      res.status(200).send(`Fetched ${toFetch} new Pokemons and ignored ${i-toFetch} duplicate Pokemons`)
     }
-  });
+  } catch (error) {
+    console.log(error);
+    res.send(error.message);
+  }
 });
 
 export default router;
