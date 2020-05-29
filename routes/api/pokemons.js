@@ -1,38 +1,38 @@
 import express from "express";
 import fetch from "node-fetch";
 import multer from "multer";
-import path from "path";
-import Storage from "@google-cloud/storage";
+import uploadImage from '../../helpers/helpers.js'
 
-const __dirname = path.resolve();
+
+// const __dirname = path.resolve();
 const router = express.Router();
 
 // Pokemon Model
 import Pokemon from "../../models/Pokemon.js";
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "./uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  },
-});
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, "./uploads/");
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, file.originalname);
+//   },
+// });
 
-const fileFilter = (req, file, cb) => {
-  // reject a file
-  if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
-    cb(null, true);
-  } else cb(null, false);
-};
+// const fileFilter = (req, file, cb) => {
+//   // reject a file
+//   if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+//     cb(null, true);
+//   } else cb(null, false);
+// };
 
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 1024 * 1024 * 5,
-  },
-  fileFilter: fileFilter,
-});
+// const upload = multer({
+//   storage: storage,
+//   limits: {
+//     fileSize: 1024 * 1024 * 5,
+//   },
+//   fileFilter: fileFilter,
+// });
 
 /*
  * @route POST
@@ -40,72 +40,31 @@ const upload = multer({
  * @body Pokemon Schema {name, height, weight, abilities: Array of Objects, firstItem: Object}
  * @
  */
-router.post("/pokemon", upload.single("pokemonImage"), async (req, res) => {
-  let pokemonURL = null, pokemonURL2;
+router.post("/pokemon", async (req, res) => {
+  let pokemonURL = null;
   if (req.file != undefined) {
-    console.log(req.file);
-    const filePath = path.join(
-      __dirname,
-      req.file.destination,
-      req.file.filename
-    );
-    console.log(filePath);
-
-    const googleCloud = new Storage.Storage({
-      keyFilename: path.join(
-        __dirname,
-        "./rising-field-278708-347ec97a4cea.json"
-      ),
-      projectId: "rising-field-278708",
-    });
-
-    // Check to see if connection is working
-    // googleCloud.getBuckets().then(x => console.log(x)).catch(err => console.log(err))
-
-    const pokemonBucket = googleCloud.bucket("pokemonsavatars");
-
-    await uploadFile(filePath).catch(console.error);
-    // const metadata = await getMetadata(req.file.filename).catch(console.error);
-    pokemonURL2 = `https://storage.cloud.google.com/pokemonsavatars/${req.file.filename}`;
-    pokemonURL = `https://storage.googleapis.com/pokemonsavatars/${req.file.filename}`;
-
-    async function uploadFile(filename) {
-      await pokemonBucket.upload(filename, {
-        gzip: true,
-        metadata: {
-          cacheControl: "public, max-age=31536000",
-        },
-      });
-      console.log(`File ${filename} was uploaded to ${pokemonBucket}`);
-    }
-
-    async function getMetadata(filename) {
-      const [metadata] = await pokemonBucket.file(filename).getMetadata();
-      console.log(`File: ${metadata.name}`);
-      console.log(`Bucket: ${metadata.bucket}`);
-      console.log(`Self link: ${metadata.selfLink}`);
-      console.log(`Size: ${metadata.size}`);
-      console.log(`Media link: ${metadata.mediaLink}`);
-    }
+    const myFile = req.file
+    // we have a Image attached
+    const imageUrl = await uploadImage(myFile)
+    pokemonURL = imageUrl
   }
+  console.log(req.body)
   const { name, height, weight, abilities, firstItem } = req.body;
   const pokemon = new Pokemon({
     name,
     height,
     weight,
-    abilities,
-    firstItem
+    abilities: JSON.parse(abilities),
+    firstItem: JSON.parse(firstItem)
   });
-  console.log('FirstItem.name: ',firstItem.name)
   if(pokemonURL != null) {
     pokemon.firstItem.url = pokemonURL
-    pokemon.firstItem.name = firstItem.name
   }
   try {
     const newPokemon = await pokemon.save();
     res.status(201).send(newPokemon);
   } catch (err) {
-    if (err.name == "ValidationError") res.status(404).send(err);
+    if (err.name == "ValidationError") res.status(404).send(err.message);
     else res.status(500).send(err.message);
   }
 });
@@ -308,10 +267,7 @@ router.get("/populate-database-v2", async (req, res) => {
           if (pokemonDetails.held_items.length > 0) {
             newPokemon.firstItem.name = pokemonDetails.held_items[0].item.name;
             newPokemon.firstItem.url = pokemonDetails.held_items[0].item.url;
-          } else {
-            newPokemon.firstItem.name = "no_held_item";
-            newPokemon.firstItem.url = "N/A";
-          }
+          } 
           newPokemon.save();
           count++;
         }

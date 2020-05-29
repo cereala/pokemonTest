@@ -4,12 +4,22 @@ import bodyParser from 'body-parser'
 import morgan from 'morgan'
 import config from './config/config.js'
 import pokemons from './routes/api/pokemons.js'
-
+import multer from 'multer'
+import uploadImage from './helpers/helpers.js'
 
 const app = express()
+const multerMid = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024 
+    }
+})
+
+
 //Middleware
+app.use(multerMid.single('pokemonImage'))
 app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({extended: true}))
+app.use(bodyParser.urlencoded({extended: false}))
 app.use(morgan('dev'))
 
 mongoose
