@@ -44,14 +44,16 @@ app.use((req, res, next) => {
     `Path ${req.path} not found. Please use /api/pokemons and refer to the documentation.`
   );
   error.status = 404;
-  next(error);
-});
-
-app.use((error, req, res, next) => {
   res.status(error.status || 500).json({
     error: { message: error.message },
   });
 });
+
+// app.use((error, req, res, next) => {
+//   res.status(error.status || 500).json({
+//     error: { message: error.message },
+//   });
+// });
 
 app.listen(config.PORT, () => {
   console.log("Server running on port: " + config.PORT);
