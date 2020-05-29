@@ -5,6 +5,7 @@ import morgan from 'morgan'
 import config from './config/config.js'
 import pokemons from './routes/api/pokemons.js'
 
+
 const app = express()
 //Middleware
 app.use(bodyParser.json())

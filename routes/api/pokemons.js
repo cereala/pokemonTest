@@ -1,7 +1,10 @@
 import express from "express";
 import fetch from "node-fetch";
 import multer from "multer";
+import path from "path";
+import Storage from "@google-cloud/storage";
 
+const __dirname = path.resolve();
 const router = express.Router();
 
 // Pokemon Model
@@ -38,22 +41,72 @@ const upload = multer({
  * @
  */
 router.post("/pokemon", upload.single("pokemonImage"), async (req, res) => {
-  if(req.file != undefined) console.log(req.file);
+  let pokemonURL = null, pokemonURL2;
+  if (req.file != undefined) {
+    console.log(req.file);
+    const filePath = path.join(
+      __dirname,
+      req.file.destination,
+      req.file.filename
+    );
+    console.log(filePath);
+
+    const googleCloud = new Storage.Storage({
+      keyFilename: path.join(
+        __dirname,
+        "./rising-field-278708-347ec97a4cea.json"
+      ),
+      projectId: "rising-field-278708",
+    });
+
+    // Check to see if connection is working
+    // googleCloud.getBuckets().then(x => console.log(x)).catch(err => console.log(err))
+
+    const pokemonBucket = googleCloud.bucket("pokemonsavatars");
+
+    await uploadFile(filePath).catch(console.error);
+    // const metadata = await getMetadata(req.file.filename).catch(console.error);
+    pokemonURL2 = `https://storage.cloud.google.com/pokemonsavatars/${req.file.filename}`;
+    pokemonURL = `https://storage.googleapis.com/pokemonsavatars/${req.file.filename}`;
+
+    async function uploadFile(filename) {
+      await pokemonBucket.upload(filename, {
+        gzip: true,
+        metadata: {
+          cacheControl: "public, max-age=31536000",
+        },
+      });
+      console.log(`File ${filename} was uploaded to ${pokemonBucket}`);
+    }
+
+    async function getMetadata(filename) {
+      const [metadata] = await pokemonBucket.file(filename).getMetadata();
+      console.log(`File: ${metadata.name}`);
+      console.log(`Bucket: ${metadata.bucket}`);
+      console.log(`Self link: ${metadata.selfLink}`);
+      console.log(`Size: ${metadata.size}`);
+      console.log(`Media link: ${metadata.mediaLink}`);
+    }
+  }
   const { name, height, weight, abilities, firstItem } = req.body;
   const pokemon = new Pokemon({
     name,
     height,
     weight,
     abilities,
-    firstItem,
+    firstItem
   });
-
+  console.log('FirstItem.name: ',firstItem.name)
+  if(pokemonURL != null) {
+    pokemon.firstItem.url = pokemonURL
+    pokemon.firstItem.name = firstItem.name
+  }
   try {
     const newPokemon = await pokemon.save();
     res.status(201).send(newPokemon);
   } catch (err) {
-      if(err.name == 'ValidationError') res.status(404).send(err)
-      else res.status(500).send(err.message);
+    if (err.name == "ValidationError") res.status(404).send(err);
+    else res.status(500).send(err.message);
   }
 });
 
@@ -78,7 +131,6 @@ router.get("/", async (req, res) => {
 router.get("/pokemon/:id", async (req, res) => {
   try {
     const pokemon = await Pokemon.findById(req.params.id);
-    console.log(pokemon);
     if (pokemon != null) res.status(200).send(pokemon);
     else
       res
@@ -100,12 +152,19 @@ router.put("/pokemon/:id", async (req, res) => {
     const pokemon = await Pokemon.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     });
+    if (pokemon != null) res.status(200).send(pokemon);
+    else
+      res
+        .status(404)
+        .send(`No Pokemon with id ${req.params.id} was found in the DB`);
     // const pokemon = await Pokemon.findOneAndUpdate({_id: req.params.id }, req.body)
-    res.status(200).send(pokemon);
   } catch (err) {
     res
       .status(500)
-      .send({ message: "No such pokemon with this ID to update", err: err });
+      .send({
+        message: `Error when updating the Pokemon with id ${req.params.id}`,
+        err: err.message,
+      });
   }
 });
 
@@ -209,7 +268,7 @@ router.get("/populate-database", (req, res) => {
 router.get("/populate-database-v2", async (req, res) => {
   try {
     let count = await Pokemon.countDocuments({});
-    let toFetch = 100 - count
+    let toFetch = 100 - count;
     if (count >= 100)
       res
         .status(200)
@@ -221,7 +280,7 @@ router.get("/populate-database-v2", async (req, res) => {
       const firstGen = "https://pokeapi.co/api/v2/generation/1";
       const response = await fetch(firstGen);
       const data = await response.json();
-      let i = 0
+      let i = 0;
 
       while (count < 100) {
         const species_url = data.pokemon_species[i].url;
@@ -254,11 +313,17 @@ router.get("/populate-database-v2", async (req, res) => {
             newPokemon.firstItem.url = "N/A";
           }
           newPokemon.save();
-          count++
+          count++;
         }
-        i++
+        i++;
       }
-      res.status(200).send(`Fetched ${toFetch} new Pokemons and ignored ${i-toFetch} duplicate Pokemons`)
+      res
+        .status(200)
+        .send(
+          `Fetched ${toFetch} new Pokemons and ignored ${
+            i - toFetch
+          } duplicate Pokemons`
+        );
     }
   } catch (error) {
     console.log(error);
