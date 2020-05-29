@@ -20,6 +20,7 @@ app.use(multerMid.single("pokemonImage"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(morgan("dev"));
+console.log('Herkouuu')
 
 mongoose
   .connect(config.MONGODB_URI, {
