@@ -29,8 +29,12 @@ mongoose
 
 app.use('/api/pokemons', pokemons)
 
+app.use('/', (req, res, next) =>
+    res.status(200).json({message: `This works for mainpage! at path ${req.path}`})
+)
+
 app.use((req, res, next) => {
-    const error = new Error('Path not found. Please use /api/pokemons and refer to the documentation.')
+    const error = new Error(`Path ${req.path} not found. Please use /api/pokemons and refer to the documentation.`)
     error.status = 404
     next(error)
 })

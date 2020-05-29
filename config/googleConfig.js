@@ -8,4 +8,5 @@ const googleCloud = new Storage.Storage({
     projectId: "rising-field-278708",
   });
 
-export default googleCloud  
+export default googleCloud
+  

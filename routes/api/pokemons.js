@@ -10,30 +10,6 @@ const router = express.Router();
 // Pokemon Model
 import Pokemon from "../../models/Pokemon.js";
 
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, "./uploads/");
-//   },
-//   filename: (req, file, cb) => {
-//     cb(null, file.originalname);
-//   },
-// });
-
-// const fileFilter = (req, file, cb) => {
-//   // reject a file
-//   if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
-//     cb(null, true);
-//   } else cb(null, false);
-// };
-
-// const upload = multer({
-//   storage: storage,
-//   limits: {
-//     fileSize: 1024 * 1024 * 5,
-//   },
-//   fileFilter: fileFilter,
-// });
-
 /*
  * @route POST
  * @description Create a new pokemon
@@ -166,12 +142,11 @@ router.delete("/pokemon", async (req, res) => {
 
 /*
  * @route GET
- * @description Populates the DB with up to 100 Pokemons from 1st Generation from PokeAPI
+ * @description Populates the DB with up to 100 Pokemons from 1st Generation from PokeAPI, Will get duplicates when repopulating
  */
 router.get("/populate-database", (req, res) => {
   // check to see if there are 100 Pokemons
   Pokemon.countDocuments({}, (err, count) => {
-    console.log(`There are ${count} in the DB.`);
     if (err) res.status(404).send(err);
     else if (count < 100) {
       const firstGen = "https://pokeapi.co/api/v2/generation/1";
@@ -222,7 +197,7 @@ router.get("/populate-database", (req, res) => {
 
 /*
  * @route GET
- * @description Populates the DB with up to 100 Pokemons from PokeAPI
+ * @description Populates the DB with up to 100 Pokemons from PokeAPI. No duplicate Pokemons when repopulating
  */
 router.get("/populate-database-v2", async (req, res) => {
   try {
