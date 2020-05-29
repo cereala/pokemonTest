@@ -30,8 +30,8 @@ router.post("/pokemon", async (req, res) => {
     name,
     height,
     weight,
-    abilities: JSON.parse(abilities),
-    firstItem: JSON.parse(firstItem)
+    abilities: req.file != undefined ? JSON.parse(abilities) : abilities,
+    firstItem: req.file != undefined ? JSON.parse(firstItem) : abilities
   });
   if(pokemonURL != null) {
     pokemon.firstItem.url = pokemonURL
