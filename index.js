@@ -5,7 +5,6 @@ import morgan from "morgan";
 import config from "./config/config.js";
 import pokemons from "./routes/api/pokemons.js";
 import multer from "multer";
-import uploadImage from "./helpers/helpers.js";
 
 const app = express();
 const multerMid = multer({
@@ -20,7 +19,6 @@ app.use(multerMid.single("pokemonImage"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(morgan("dev"));
-console.log('Herkouuu')
 
 mongoose
   .connect(config.MONGODB_URI, {
@@ -49,11 +47,6 @@ app.use((req, res, next) => {
   });
 });
 
-// app.use((error, req, res, next) => {
-//   res.status(error.status || 500).json({
-//     error: { message: error.message },
-//   });
-// });
 
 app.listen(config.PORT, () => {
   console.log("Server running on port: " + config.PORT);

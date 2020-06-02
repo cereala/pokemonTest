@@ -1,10 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
-import multer from "multer";
 import uploadImage from '../../helpers/helpers.js'
 
-
-// const __dirname = path.resolve();
 const router = express.Router();
 
 // Pokemon Model
@@ -40,7 +37,7 @@ router.post("/pokemon", async (req, res) => {
     const newPokemon = await pokemon.save();
     res.status(201).send(newPokemon);
   } catch (err) {
-    if (err.name == "ValidationError") res.status(404).send(err.message);
+    if (err.name == "ValidationError") res.status(400).send(err.message);
     else res.status(500).send(err.message);
   }
 });
@@ -124,7 +121,7 @@ router.delete("/pokemon/:id", async (req, res) => {
  * @route DELETE
  * @description Deletes ALL Pokemons from the DB
  */
-router.delete("/pokemon", async (req, res) => {
+router.delete("/", async (req, res) => {
   try {
     const result = await Pokemon.deleteMany({});
     if (result.deletedCount == 0) {
@@ -144,7 +141,7 @@ router.delete("/pokemon", async (req, res) => {
  * @route GET
  * @description Populates the DB with up to 100 Pokemons from 1st Generation from PokeAPI, Will get duplicates when repopulating
  */
-router.get("/populate-database", (req, res) => {
+router.get("/populate-database-v2", (req, res) => {
   // check to see if there are 100 Pokemons
   Pokemon.countDocuments({}, (err, count) => {
     if (err) res.status(404).send(err);
@@ -199,7 +196,7 @@ router.get("/populate-database", (req, res) => {
  * @route GET
  * @description Populates the DB with up to 100 Pokemons from PokeAPI. No duplicate Pokemons when repopulating
  */
-router.get("/populate-database-v2", async (req, res) => {
+router.get("/populate-database", async (req, res) => {
   try {
     let count = await Pokemon.countDocuments({});
     let toFetch = 100 - count;
