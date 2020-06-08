@@ -1,6 +1,6 @@
 import express from "express";
 import fetch from "node-fetch";
-import uploadImage from '../../helpers/helpers.js'
+import uploadImage from "../../helpers/helpers.js";
 
 const router = express.Router();
 
@@ -14,26 +14,27 @@ import Pokemon from "../../models/Pokemon.js";
  * @
  */
 router.post("/pokemon", async (req, res) => {
+  try {
   let pokemonURL = null;
-  if (req.file != undefined) {
-    const myFile = req.file
+  if (req.file !== undefined) {
+    const myFile = req.file;
     // we have a Image attached
-    const imageUrl = await uploadImage(myFile)
-    pokemonURL = imageUrl
+    const imageUrl = await uploadImage(myFile);
+    pokemonURL = imageUrl;
   }
-  console.log(req.body)
+  console.log(req.body);
   const { name, height, weight, abilities, firstItem } = req.body;
   const pokemon = new Pokemon({
     name,
     height,
     weight,
-    abilities: req.file != undefined ? JSON.parse(abilities) : abilities,
-    firstItem: req.file != undefined ? JSON.parse(firstItem) : abilities
+    abilities: req.file !== undefined ? JSON.parse(abilities) : abilities,
+    firstItem: req.file !== undefined ? JSON.parse(firstItem) : abilities,
   });
-  if(pokemonURL != null) {
-    pokemon.firstItem.url = pokemonURL
+  if (pokemonURL != null) {
+    pokemon.firstItem.url = pokemonURL;
   }
-  try {
+  
     const newPokemon = await pokemon.save();
     res.status(201).send(newPokemon);
   } catch (err) {
@@ -84,19 +85,17 @@ router.put("/pokemon/:id", async (req, res) => {
     const pokemon = await Pokemon.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     });
-    if (pokemon != null) res.status(200).send(pokemon);
+    if (pokemon !== null) res.status(200).send(pokemon);
     else
       res
         .status(404)
         .send(`No Pokemon with id ${req.params.id} was found in the DB`);
     // const pokemon = await Pokemon.findOneAndUpdate({_id: req.params.id }, req.body)
   } catch (err) {
-    res
-      .status(500)
-      .send({
-        message: `Error when updating the Pokemon with id ${req.params.id}`,
-        err: err.message,
-      });
+    res.status(500).send({
+      message: `Error when updating the Pokemon with id ${req.params.id}`,
+      err: err.message,
+    });
   }
 });
 
@@ -107,8 +106,12 @@ router.put("/pokemon/:id", async (req, res) => {
  */
 router.delete("/pokemon/:id", async (req, res) => {
   try {
-    await Pokemon.findByIdAndDelete(req.params.id);
-    res.status(204).send();
+    const result = await Pokemon.findByIdAndDelete(req.params.id);
+    if(result === null){
+      res.status(200).send(`Pokemon with id: ${req.params.id} was not found in the DB in order to delete it!`);
+    } else {
+      res.status(204).send();
+    }
   } catch (err) {
     res.status(500).send({
       message: `Error when trying to delete Pokemon with id ${req.params.id}`,
@@ -147,45 +150,51 @@ router.get("/populate-database-v2", (req, res) => {
     if (err) res.status(404).send(err);
     else if (count < 100) {
       const firstGen = "https://pokeapi.co/api/v2/generation/1";
-      fetch(firstGen)
-        .then((res) => res.json())
-        .then((data) => {
-          for (let i = count; i <= 100; i++) {
-            const species_url = data.pokemon_species[i].url;
-            // example: https://pokeapi.co/api/v2/pokemon-species/149/   --Up to 151 is 1st gen
-            fetch(species_url)
-              .then((res) => res.json())
-              .then((data) => {
-                const varieties = data.varieties;
-                fetch(varieties[0].pokemon.url)
-                  .then((res) => res.json())
-                  .then((data) => {
-                    const newPokemon = new Pokemon();
-                    newPokemon.name = data.name;
-                    newPokemon.height = data.height;
-                    newPokemon.weight = data.weight;
-                    data.abilities.forEach((ability) => {
-                      newPokemon.abilities.push({
-                        ability_name: ability.ability.name,
-                        ability_slot: ability.slot,
-                        hidden: ability.is_hidden,
+      fetch(firstGen).then((res) => {
+        res
+          .json()
+          .then((data) => {
+            for (let i = count; i <= 100; i++) {
+              const species_url = data.pokemon_species[i].url;
+              // example: https://pokeapi.co/api/v2/pokemon-species/149/   --Up to 151 is 1st gen
+              fetch(species_url)
+                .then((res) => {
+                  res.json().then((data) => {
+                    const varieties = data.varieties;
+                    fetch(varieties[0].pokemon.url).then((res) => {
+                      res.json().then((data) => {
+                        const newPokemon = new Pokemon();
+                        newPokemon.name = data.name;
+                        newPokemon.height = data.height;
+                        newPokemon.weight = data.weight;
+                        data.abilities.forEach((ability) => {
+                          newPokemon.abilities.push({
+                            ability_name: ability.ability.name,
+                            ability_slot: ability.slot,
+                            hidden: ability.is_hidden,
+                          });
+                        });
+                        if (data.held_items.length > 0) {
+                          newPokemon.firstItem.name =
+                            data.held_items[0].item.name;
+                          newPokemon.firstItem.url =
+                            data.held_items[0].item.url;
+                        } else {
+                          newPokemon.firstItem.name = "no_held_item";
+                          newPokemon.firstItem.url = "N/A";
+                        }
+                        newPokemon.save();
                       });
                     });
-                    if (data.held_items.length > 0) {
-                      newPokemon.firstItem.name = data.held_items[0].item.name;
-                      newPokemon.firstItem.url = data.held_items[0].item.url;
-                    } else {
-                      newPokemon.firstItem.name = "no_held_item";
-                      newPokemon.firstItem.url = "N/A";
-                    }
-                    newPokemon.save();
                   });
-              })
-              .catch((err) => console.log(err));
-          }
-          res.status(200).send(`Fetched ${100 - count} of them`);
-        })
-        .catch((err) => console.log(err));
+                })
+                .catch((err) => console.log(err));
+            }
+          })
+          .catch((err) => console.log(err));
+      });
+      res.status(200).send(`Fetched ${100 - count} of them`);
+
     } else {
       res.status(200).send(`There are enough Pokemons in the DB(${count})`);
     }
@@ -211,13 +220,20 @@ router.get("/populate-database", async (req, res) => {
       const firstGen = "https://pokeapi.co/api/v2/generation/1";
       const response = await fetch(firstGen);
       const data = await response.json();
-      let i = 0;
+      let speciesV2 = [];
+      data.pokemon_species.forEach((x) => {
+        let prom = fetch(x.url);
+        speciesV2.push(prom);
+      });
+      const allAtOnce = await Promise.all(speciesV2);
 
+      let i = 0;
       while (count < 100) {
-        const species_url = data.pokemon_species[i].url;
+        //const species_url = data.pokemon_species[i].url;
         // example: https://pokeapi.co/api/v2/pokemon-species/149/   --Up to 151 is 1st gen
-        const res = await fetch(species_url);
-        const specie = await res.json();
+        //const res = await fetch(species_url);
+        //const specie = await res.json();
+        const specie = await allAtOnce[i].json();
         const pokemonName = specie.varieties[0].pokemon.name;
         const pokemonURL = specie.varieties[0].pokemon.url;
         // check for duplicate Pokemon in DB
@@ -239,7 +255,7 @@ router.get("/populate-database", async (req, res) => {
           if (pokemonDetails.held_items.length > 0) {
             newPokemon.firstItem.name = pokemonDetails.held_items[0].item.name;
             newPokemon.firstItem.url = pokemonDetails.held_items[0].item.url;
-          } 
+          }
           newPokemon.save();
           count++;
         }
